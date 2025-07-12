@@ -14,6 +14,7 @@ This system uses a two-stage matching approach to efficiently match inventory it
 
 - **Efficient Processing**: TF-IDF pre-filtering reduces computation time by 80-90%
 - **Semantic Matching**: Uses sentence embeddings to understand product name similarities
+- **Category-Enhanced Matching**: Incorporates product categories for more accurate matching
 - **Conflict Resolution**: Handles cases where multiple items compete for the same match
 - **Data Cleaning**: Automatically merges duplicate items and handles data quality issues
 - **Comprehensive Logging**: Detailed logs for tracking the matching process
@@ -42,6 +43,7 @@ The system expects CSV files in the `data/` directory:
 Each CSV should contain columns:
 - `Item` - Product name/description
 - `Qty.` - Quantity
+- `Category` - Product category (used for enhanced matching)
 - `Price` - Price (optional)
 - `UPC` - UPC code (optional)
 
@@ -56,8 +58,8 @@ Each CSV should contain columns:
 ### Matching Algorithm
 
 1. **Data Cleaning**: Merges duplicate items and handles missing values
-2. **Embedding Creation**: Generates sentence embeddings for all item names
-3. **TF-IDF Filtering**: Creates candidate lists (top 50 matches) for each sending item
+2. **Category-Enhanced Embeddings**: Creates embeddings using "Category Item" format for better semantic matching
+3. **TF-IDF Filtering**: Creates candidate lists (top 50 matches) for each sending item using enhanced names
 4. **Distance Calculation**: Computes cosine distances between embeddings for candidates
 5. **Optimal Assignment**: Resolves conflicts using greedy assignment algorithm
 

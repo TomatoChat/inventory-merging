@@ -16,7 +16,17 @@ logging.basicConfig(
 
 
 def checkDuplicatesColumnDifferences(df: pd.DataFrame, columnToCheck: str, columnDuplicated: str = 'Item') -> tuple[int, list[str]]:
-    """Check for duplicates with different values in specified column."""
+    """
+    Check for duplicates with different values in specified column.
+    
+    Args:
+        df (pd.DataFrame): DataFrame to check for duplicates
+        columnToCheck (str): Column name to check for different values among duplicates
+        columnDuplicated (str, optional): Column name used to identify duplicates. Defaults to 'Item'.
+    
+    Returns:
+        tuple: (count, item_list) - Number of items with different values and list of item names
+    """
     sortedDuplicates = df.loc[df.duplicated(subset=[columnDuplicated], keep=False)].sort_values('Item')
     differentValues = []
 
@@ -32,7 +42,17 @@ def checkDuplicatesColumnDifferences(df: pd.DataFrame, columnToCheck: str, colum
 
 
 def mergeDuplicates(df: pd.DataFrame, columnsToMerge: dict[str, str], columnDuplicated: list[str] = ['Item']) -> pd.DataFrame:
-    """Merge duplicate items by aggregating specified columns."""
+    """
+    Merge duplicate items by aggregating specified columns.
+    
+    Args:
+        df (pd.DataFrame): DataFrame containing items with potential duplicates
+        columnsToMerge (dict[str, str]): Dictionary mapping column names to aggregation functions
+        columnDuplicated (list[str], optional): Column(s) used to identify duplicates. Defaults to ['Item'].
+    
+    Returns:
+        pd.DataFrame: DataFrame with duplicates merged according to specified aggregation rules
+    """
     logging.info(f'Duplicate item #{df.duplicated(subset=columnDuplicated).sum()}')
     mergedDuplicates = df.groupby(columnDuplicated).agg(columnsToMerge).reset_index()
     df = pd.merge(df.drop_duplicates(subset=columnDuplicated, keep='first').drop(columns=list(columnsToMerge.keys())), mergedDuplicates,
@@ -43,21 +63,42 @@ def mergeDuplicates(df: pd.DataFrame, columnsToMerge: dict[str, str], columnDupl
     return df
 
 
-def createEmbeddings(itemNames: list[str], modelNameHF: str = 'all-MiniLM-L6-v2') -> list[list[float]]:
-    """Create sentence embeddings for item names."""
-    model = SentenceTransformer(modelNameHF)
-    embeddings = model.encode(itemNames)
-    
-    return embeddings.tolist()
+
 
 
 def addEmbeddingsToInventory(inventory: pd.DataFrame) -> pd.DataFrame:
-    """Add embeddings to inventory DataFrame."""
+    """
+    Add embeddings to inventory DataFrame with category-enhanced item names.
+    
+    Args:
+        inventory (pd.DataFrame): DataFrame containing inventory items with 'Item' and 'Category' columns
+    
+    Returns:
+        pd.DataFrame: Original DataFrame with additional 'EnhancedItem' and 'Embeddings' columns
+    """
     inventory = inventory.loc[(inventory['Item'].notna()) & (inventory['Item'].str.strip() != '')].reset_index(drop=True)
+    
+    # Create category-enhanced item names for better matching
+    enhancedItemNames = []
+
+    for _, row in inventory.iterrows():
+        itemName = row['Item']
+        category = row.get('Category', '')
+
+        if category and pd.notna(category):
+            enhancedName = f"{category} {itemName}"
+        else:
+            enhancedName = itemName
+        
+        enhancedItemNames.append(enhancedName)
+    
+    model = SentenceTransformer('all-MiniLM-L6-v2')
+    embeddings = model.encode(enhancedItemNames).tolist()
     
     embeddingsDF = pd.DataFrame({
         'Item': inventory['Item'].tolist(),
-        'Embeddings': createEmbeddings(inventory['Item'].tolist())
+        'EnhancedItem': enhancedItemNames,
+        'Embeddings': embeddings
     })
     
     inventory = pd.merge(inventory, embeddingsDF, on=['Item'], how='left')
@@ -77,8 +118,8 @@ def getTopCandidatesTFIDF(sendingInventory: pd.DataFrame, receivingInventory: pd
     Returns:
         dict: Dictionary mapping sending item indices to lists of receiving item indices.
     """
-    sendingInventoryItems = sendingInventory['Item'].tolist()
-    receivingInventoryItems = receivingInventory['Item'].tolist()
+    sendingInventoryItems = sendingInventory['EnhancedItem'].tolist()
+    receivingInventoryItems = receivingInventory['EnhancedItem'].tolist()
     
     logging.info(f'Creating TF-IDF matrix for all items...')
     vectorizer = TfidfVectorizer(
@@ -108,8 +149,7 @@ def getTopCandidatesTFIDF(sendingInventory: pd.DataFrame, receivingInventory: pd
     return candidatesSimilarity
 
 
-def calculateEmbeddingDistancesForCandidates(sendingInventory: pd.DataFrame, receivingInventory: pd.DataFrame, 
-                                           candidatesDict: dict) -> dict:
+def calculateEmbeddingDistancesForCandidates(sendingInventory: pd.DataFrame, receivingInventory: pd.DataFrame, candidatesDict: dict) -> dict:
     """
     Calculate embedding distances between sending items and their top TF-IDF candidates.
     
